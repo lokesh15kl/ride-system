@@ -138,7 +138,11 @@ export default function AdminDashboard() {
                                             <td className="py-4 font-mono text-gray-300">{d.driverId}</td>
                                             <td className="py-4 text-white font-medium">{d.name}</td>
                                             <td className="py-4"><span className="px-2 py-1 bg-white/5 rounded-md text-xs text-primary">{d.vehicleType}</span></td>
-                                            <td className="py-4 text-xs font-mono text-green-400">{d.status}</td>
+                                            <td className="py-4 text-xs font-mono text-green-400">
+                                                {d.verificationStatus === 'PENDING' ? (
+                                                    <button onClick={async () => { await apiService.approveDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-yellow-500/20 text-yellow-500 rounded border border-yellow-500/40 hover:bg-yellow-500/30 transition">Approve KYC</button>
+                                                ) : d.status}
+                                            </td>
                                         </tr>
                                     ))
                                 )}

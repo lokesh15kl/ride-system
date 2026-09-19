@@ -168,7 +168,8 @@ export default function PassengerDashboard() {
             setIsSearching(false);
             setStep(5);
             setTimeout(() => {
-                navigate(`/passenger/ride/${res.data.rideId}`);
+                const acquiredRideId = res.data.ride?.rideId || res.data.rideId;
+                navigate(`/passenger/ride/${acquiredRideId}`);
             }, 2000);
         } catch (e) {
             console.error("Booking Error", e);

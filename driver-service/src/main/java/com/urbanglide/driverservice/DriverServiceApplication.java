@@ -34,8 +34,21 @@ public class DriverServiceApplication {
         }
         Driver driver = new Driver(driverId, name, "AVAILABLE");
         driver.setVehicleType(vehicleType);
+        driver.setVerificationStatus("PENDING"); // Dynamic KYC flow addition
         driverRepository.save(driver);
         return ResponseEntity.ok(driver);
+    }
+
+    @PostMapping("/approve")
+    public ResponseEntity<?> approveDriver(@RequestParam("driverId") String driverId) {
+        Optional<Driver> opt = driverRepository.findByDriverId(driverId);
+        if (opt.isPresent()) {
+            Driver driver = opt.get();
+            driver.setVerificationStatus("APPROVED");
+            driverRepository.save(driver);
+            return ResponseEntity.ok(driver);
+        }
+        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/status")

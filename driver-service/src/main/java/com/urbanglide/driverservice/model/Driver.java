@@ -20,6 +20,8 @@ public class Driver {
 
     private String vehicleType; // BIKE, CAR, PREMIUM_CAR, AUTO, E_RIKSHAW
 
+    private String verificationStatus; // PENDING, APPROVED
+
     public Driver() {
     }
 
@@ -91,5 +93,13 @@ public class Driver {
 
     public void setVehicleType(String vehicleType) {
         this.vehicleType = vehicleType;
+    }
+
+    public String getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
     }
 }

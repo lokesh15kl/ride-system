@@ -58,20 +58,39 @@ public class RideServiceApplication {
 
         // Random amount logic based on vehicleType
         double baseFare = 10;
-        double multiplier = 1.0;
+        double typeMultiplier = 1.0;
         if ("PREMIUM_CAR".equalsIgnoreCase(vehicleType))
-            multiplier = 2.0;
+            typeMultiplier = 2.0;
         else if ("BIKE".equalsIgnoreCase(vehicleType))
-            multiplier = 0.5;
+            typeMultiplier = 0.5;
         else if ("E_RIKSHAW".equalsIgnoreCase(vehicleType))
-            multiplier = 0.4;
+            typeMultiplier = 0.4;
         else if ("AUTO".equalsIgnoreCase(vehicleType))
-            multiplier = 0.7;
+            typeMultiplier = 0.7;
 
-        ride.setAmount(Math.round((baseFare + Math.random() * 40) * multiplier * 100.0) / 100.0);
+        // Dynamic Surge Pricing Engine
+        int activeRequests = rideRepository.findByStatus("REQUESTED").size();
+        int activeDrivers = 1; // Default to 1 to avoid division by zero
+        try {
+            List<Map<String, Object>> nearby = driverClient.getNearbyDrivers(
+                sourceLatitude != null ? sourceLatitude : 16.5, 
+                sourceLongitude != null ? sourceLongitude : 80.6, 
+                15.0, vehicleType);
+            if (nearby != null && !nearby.isEmpty()) {
+                activeDrivers = nearby.size();
+            }
+        } catch (Exception e) {}
+
+        double surgeMultiplier = 1.0;
+        double ratio = (double) activeRequests / activeDrivers;
+        if (ratio > 1.5) surgeMultiplier = 1.5;
+        if (ratio > 3.0) surgeMultiplier = 2.0;
+        if (activeDrivers == 1 && activeRequests > 5) surgeMultiplier = 2.5;
+
+        ride.setAmount(Math.round((baseFare + Math.random() * 40) * typeMultiplier * surgeMultiplier * 100.0) / 100.0);
 
         rideRepository.save(ride);
-        return ResponseEntity.ok(ride);
+        return ResponseEntity.ok(Map.of("ride", ride, "surgeApplied", surgeMultiplier > 1.0, "surgeMultiplier", surgeMultiplier));
     }
 
     @GetMapping("/all")

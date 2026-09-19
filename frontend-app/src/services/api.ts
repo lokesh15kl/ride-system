@@ -62,6 +62,7 @@ export const apiService = {
 
     // Drivers
     registerDriver: (driverId: string, name: string, vehicleType: string) => apiClient.post('/drivers/register', null, { params: { driverId, name, vehicleType } }),
+    approveDriver: (driverId: string) => apiClient.post('/drivers/approve', null, { params: { driverId } }),
     getAllDrivers: () => apiClient.get('/drivers/all')
 };
 
