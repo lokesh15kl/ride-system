@@ -9,7 +9,9 @@ export default function RideTracking() {
     const navigate = useNavigate();
     const [status, setStatus] = useState(0);
     const [amount, setAmount] = useState<number | null>(null);
-    const [isPaying, setIsPaying] = useState(false);
+    const [rating, setRating] = useState(0);
+    const [comment, setComment] = useState("");
+    const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     // 0: searching, 1: assigned, 2: arriving, 3: arrived, 4: in_transit, 5: completed
 
     const [stopPolling, setStopPolling] = useState(false);
@@ -60,17 +62,18 @@ export default function RideTracking() {
         }
     }, [status]);
 
-    const handlePayment = async () => {
-        // Obsolete as payment is auto, but keeping for fallback
-        setIsPaying(true);
+    const handleFeedbackSubmit = async () => {
         try {
-            await apiService.payForRide(id || 'unknown');
-            setIsPaying(false);
-            navigate('/passenger/dashboard');
-        } catch (e) {
-            setIsPaying(false);
-            navigate('/passenger/dashboard');
+            await apiService.submitFeedback(id || '', rating > 0 ? rating : 5, comment);
+            setFeedbackSubmitted(true);
+        } catch (e: any) {
+            console.error("Feedback error", e);
+            setFeedbackSubmitted(true); // Treat as done anyway to unclutter UI
         }
+    };
+
+    const handleBookAnother = () => {
+        navigate('/passenger/dashboard');
     };
 
     const statuses = [
@@ -148,10 +151,55 @@ export default function RideTracking() {
                                     <ShieldCheck className="text-secondary" />
                                 </div>
                                 <div>
-                                    <div className="font-bold">Driver ID: N-741</div>
-                                    <div className="text-sm text-gray-400">Rating: 4.9 • Comfort Sedan</div>
+                                    <div className="font-bold">Driver Identity Verified</div>
+                                    <div className="text-sm text-gray-400">Arriving shortly to your location.</div>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {status === 5 && (
+                        <div className="mt-8 p-6 border border-primary/30 rounded-xl bg-surface/80 shadow-lg">
+                            <h4 className="text-lg font-bold text-center border-b border-white/10 pb-4 mb-4 uppercase tracking-widest text-primary">Ride Completed</h4>
+                            <div className="text-center mb-6">
+                                <div className="text-sm text-gray-400 mb-1">Fare Paid</div>
+                                <div className="text-3xl font-mono text-green-400">₹{amount?.toFixed(2) || '0.00'}</div>
+                            </div>
+
+                            {!feedbackSubmitted ? (
+                                <div className="space-y-4">
+                                    <div className="text-center font-bold text-sm">How was your ride?</div>
+                                    <div className="flex justify-center gap-2">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <button
+                                                key={star}
+                                                onClick={() => setRating(star)}
+                                                className={`text-2xl transition-colors ${rating >= star ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400/50'}`}
+                                            >
+                                                ★
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <textarea
+                                        className="w-full bg-black/40 border border-white/10 rounded p-3 text-sm focus:border-primary outline-none"
+                                        placeholder="Comment (optional)"
+                                        value={comment}
+                                        onChange={e => setComment(e.target.value)}
+                                        rows={2}
+                                    />
+                                    <div className="grid grid-cols-2 gap-2 mt-4">
+                                        <button onClick={() => setFeedbackSubmitted(true)} className="px-4 py-2 border border-white/20 rounded hover:bg-white/5 transition">SKIP</button>
+                                        <button onClick={handleFeedbackSubmit} className="px-4 py-2 bg-primary text-black font-bold rounded hover:bg-primary/90 transition shadow-[0_0_15px_rgba(0,240,255,0.4)]">SUBMIT</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center space-y-6">
+                                    <div className="text-secondary font-bold">Thanks for your feedback!</div>
+                                    <button onClick={handleBookAnother} className="w-full py-4 border border-white/20 rounded font-bold hover:bg-white/5 hover:border-white/50 transition">
+                                        BOOK ANOTHER RIDE
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

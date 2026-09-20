@@ -51,6 +51,18 @@ public class DriverServiceApplication {
         return ResponseEntity.notFound().build();
     }
 
+    @PostMapping("/reject")
+    public ResponseEntity<?> rejectDriver(@RequestParam("driverId") String driverId) {
+        Optional<Driver> opt = driverRepository.findByDriverId(driverId);
+        if (opt.isPresent()) {
+            Driver driver = opt.get();
+            driver.setVerificationStatus("REJECTED");
+            driverRepository.save(driver);
+            return ResponseEntity.ok(driver);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
     @GetMapping("/status")
     public ResponseEntity<?> getStatus(@RequestParam("driverId") String driverId) {
         Optional<Driver> driver = driverRepository.findByDriverId(driverId);
@@ -110,6 +122,12 @@ public class DriverServiceApplication {
         } else {
             drivers = driverRepository.findNearbyAvailableDrivers(latitude, longitude, radius);
         }
+
+        // Ensure only APPROVED drivers are dispatched
+        drivers = drivers.stream()
+                .filter(d -> "APPROVED".equals(d.getVerificationStatus()))
+                .collect(java.util.stream.Collectors.toList());
+
         return ResponseEntity.ok(drivers);
     }
 }

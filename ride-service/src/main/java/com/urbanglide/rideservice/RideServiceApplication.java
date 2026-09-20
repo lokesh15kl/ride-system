@@ -35,6 +35,9 @@ public class RideServiceApplication {
     private PaymentClient paymentClient;
 
     @Autowired
+    private com.urbanglide.rideservice.repository.RideFeedbackRepository feedbackRepository;
+
+    @Autowired
     private DriverClient driverClient;
 
     @Autowired
@@ -312,6 +315,41 @@ public class RideServiceApplication {
             return ResponseEntity.ok(response);
         }
         return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
+    }
+
+    @PostMapping("/{rideId}/feedback")
+    public ResponseEntity<?> submitFeedback(@PathVariable("rideId") String rideId,
+            @RequestHeader(value = "X-User-Id", required = false) String passengerId,
+            @RequestBody java.util.Map<String, Object> body) {
+        Optional<Ride> optRide = rideRepository.findByRideId(rideId);
+        if (optRide.isEmpty())
+            return ResponseEntity.status(404).body(Map.of("error", "Ride not found"));
+
+        Ride ride = optRide.get();
+        if (!"COMPLETED".equals(ride.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Ride is not completed yet"));
+        }
+
+        if (passengerId != null && !passengerId.equals(ride.getUserId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Only the passenger can submit feedback"));
+        }
+
+        if (feedbackRepository.findByRideId(rideId).isPresent()) {
+            return ResponseEntity.status(409).body(Map.of("error", "Feedback already submitted for this ride"));
+        }
+
+        Integer rating = (Integer) body.get("rating");
+        if (rating == null || rating < 1 || rating > 5) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Rating must be between 1 and 5"));
+        }
+
+        String comment = (String) body.get("comment");
+
+        com.urbanglide.rideservice.model.RideFeedback feedback = new com.urbanglide.rideservice.model.RideFeedback(
+                rideId, ride.getUserId(), ride.getDriverId(), rating, comment);
+        feedbackRepository.save(feedback);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Feedback submitted"));
     }
 
     @GetMapping("/nearby-drivers")

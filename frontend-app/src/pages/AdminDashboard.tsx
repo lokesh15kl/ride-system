@@ -126,6 +126,7 @@ export default function AdminDashboard() {
                                     <th className="pb-3 border-b border-white/10 font-normal">Grid ID</th>
                                     <th className="pb-3 border-b border-white/10 font-normal">Operator</th>
                                     <th className="pb-3 border-b border-white/10 font-normal">Segment</th>
+                                    <th className="pb-3 border-b border-white/10 font-normal">Vehicle #</th>
                                     <th className="pb-3 border-b border-white/10 font-normal">Status</th>
                                 </tr>
                             </thead>
@@ -138,10 +139,14 @@ export default function AdminDashboard() {
                                             <td className="py-4 font-mono text-gray-300">{d.driverId}</td>
                                             <td className="py-4 text-white font-medium">{d.name}</td>
                                             <td className="py-4"><span className="px-2 py-1 bg-white/5 rounded-md text-xs text-primary">{d.vehicleType}</span></td>
+                                            <td className="py-4 font-mono text-gray-300">{d.vehicleNumber || 'N/A'}</td>
                                             <td className="py-4 text-xs font-mono text-green-400">
                                                 {d.verificationStatus === 'PENDING' ? (
-                                                    <button onClick={async () => { await apiService.approveDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-yellow-500/20 text-yellow-500 rounded border border-yellow-500/40 hover:bg-yellow-500/30 transition">Approve KYC</button>
-                                                ) : d.status}
+                                                    <div className="flex gap-2">
+                                                        <button onClick={async () => { await apiService.approveDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-yellow-500/20 text-yellow-500 rounded border border-yellow-500/40 hover:bg-yellow-500/30 transition">APPROVE</button>
+                                                        <button onClick={async () => { await apiService.rejectDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-red-500/20 text-red-500 rounded border border-red-500/40 hover:bg-red-500/30 transition">REJECT</button>
+                                                    </div>
+                                                ) : <span className={d.verificationStatus === 'REJECTED' ? 'text-red-500' : 'text-green-400'}>{d.verificationStatus === 'APPROVED' ? d.status : d.verificationStatus}</span>}
                                             </td>
                                         </tr>
                                     ))
