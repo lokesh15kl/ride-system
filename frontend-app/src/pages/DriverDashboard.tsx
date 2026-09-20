@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, MapPin, Power, CheckCircle2, ChevronRight, DollarSign, LocateFixed, Navigation } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { apiService } from '../services/api';
+import RideMap from '../components/RideMap';
 
 const data = [
     { time: '08:00', load: 20 },
@@ -14,9 +15,11 @@ const data = [
 
 export default function DriverDashboard() {
     const [isOnline, setIsOnline] = useState(false);
+    const [driverPos, setDriverPos] = useState<{ lat: number, lng: number } | null>(null);
     const [request, setRequest] = useState<any>(null);
     const [activeRide, setActiveRide] = useState<any>(null);
     const [lastCompletedRide, setLastCompletedRide] = useState<any>(null);
+    const [completingRide, setCompletingRide] = useState(false);
     const [driverStats, setDriverStats] = useState({ yield: 0, completed: 0 });
 
     // Secure extraction of driverId from token
@@ -31,10 +34,22 @@ export default function DriverDashboard() {
         return 'DRV-1';
     };
 
-    // Live Grid Polling for API Requests & Active Rides
     useEffect(() => {
         let timer: NodeJS.Timeout | null = null;
         if (isOnline) {
+            // Geolocation tracking
+            const watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    setDriverPos({ lat, lng: lon });
+                    const driverId = getDriverId();
+                    apiService.updateDriverLocation(driverId, lat, lon).catch(console.error);
+                },
+                (err) => console.error("Geolocation error", err),
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+
             const pollDriverState = async () => {
                 try {
                     const driverId = getDriverId();
@@ -58,12 +73,11 @@ export default function DriverDashboard() {
                             eta: 'Live',
                             fare: `₹${myActiveRide.amount?.toFixed(2)}`,
                             pickup: myActiveRide.source || 'Unknown Location',
-                            dropoff: myActiveRide.destination || 'Unknown Dropoff'
+                            dropoff: myActiveRide.destination || 'Unknown Dropoff',
+                            passengerPos: myActiveRide.sourceLatitude ? { lat: myActiveRide.sourceLatitude, lng: myActiveRide.sourceLongitude } : null,
+                            destinationPos: myActiveRide.destinationLatitude ? { lat: myActiveRide.destinationLatitude, lng: myActiveRide.destinationLongitude } : null
                         });
                         setRequest(null);
-
-                        // Push driver location while active
-                        await apiService.updateDriverLocation(driverId, 16.5 + Math.random() * 0.01, 80.6 + Math.random() * 0.01);
                         return; // Skip requested rides if we are busy
                     } else if (activeRide) {
                         setActiveRide(null); // Backend says we are free
@@ -74,14 +88,29 @@ export default function DriverDashboard() {
                         const res = await apiService.getRequestedRides();
                         const reqs = res.data || [];
                         if (reqs.length > 0) {
-                            const r = reqs[0];
+                            // Filter for rides that truly need dispatch (could add vehicleType checks if it was stored locally, but we rely on backend for now)
+                            const r = reqs[reqs.length - 1]; // pick the most recent one for the broadcast!
+
+                            // Simple Haversine logic or fallback
+                            let distDisplay = 'Calculating...';
+                            if (r.sourceLatitude && r.sourceLongitude && r.destinationLatitude && r.destinationLongitude) {
+                                const dLat = (r.destinationLatitude - r.sourceLatitude) * (Math.PI / 180);
+                                const dLon = (r.destinationLongitude - r.sourceLongitude) * (Math.PI / 180);
+                                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(r.sourceLatitude * (Math.PI / 180)) * Math.cos(r.destinationLatitude * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                                const d = 6371 * c;
+                                distDisplay = d > 0.1 ? (d.toFixed(1) + ' km') : 'Nearby';
+                            }
+
                             setRequest({
                                 rideId: r.rideId,
-                                distance: 'Approx 3.2 km',
-                                eta: '4 mins',
+                                distance: distDisplay,
+                                eta: 'N/A', // Dynamic tracking typically uses external APIs
                                 fare: `₹${r.amount?.toFixed(2)}`,
                                 pickup: r.source || 'Unknown Location',
-                                dropoff: r.destination || 'Unknown Dropoff'
+                                dropoff: r.destination || 'Unknown Dropoff',
+                                passengerPos: r.sourceLatitude ? { lat: r.sourceLatitude, lng: r.sourceLongitude } : null,
+                                destinationPos: r.destinationLatitude ? { lat: r.destinationLatitude, lng: r.destinationLongitude } : null
                             });
                         } else {
                             setRequest(null);
@@ -94,12 +123,15 @@ export default function DriverDashboard() {
 
             pollDriverState();
             timer = setInterval(pollDriverState, 3000);
+            return () => {
+                if (timer) clearInterval(timer);
+                if (watchId) navigator.geolocation.clearWatch(watchId);
+            };
         } else {
             if (timer) clearInterval(timer);
             setRequest(null);
             // We consciously intentionally do not clear activeRide here, the user might just toggle offline
         }
-        return () => { if (timer) clearInterval(timer); };
     }, [isOnline]); // removed activeRide dependency to keep poll running
 
     const handleAcceptRide = async () => {
@@ -108,9 +140,20 @@ export default function DriverDashboard() {
             await apiService.acceptRide(request.rideId, getDriverId());
             setActiveRide({ ...request, status: 'ACCEPTED' });
             setRequest(null);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to accept ride", e);
-            setRequest(null);
+            if (e.response?.status === 403) {
+                alert("Driver is not authorized to accept this ride.");
+            } else if (e.response?.status === 409) {
+                alert("Ride has already been accepted by another driver.");
+            } else if (e.response?.status === 404) {
+                alert("Ride no longer exists.");
+            } else if (e.response?.status === 401) {
+                alert("Please log in again.");
+            } else {
+                alert("Ride acceptance failed due to a server error.");
+            }
+            // Specifically DO NOT clear the request here, let the automated poll figure out if it's still alive or taken by another driver.
         }
     };
 
@@ -139,17 +182,21 @@ export default function DriverDashboard() {
     };
 
     const handleCompleteRide = async () => {
-        if (!activeRide) return;
+        if (!activeRide || completingRide) return;
+        setCompletingRide(true);
         try {
-            await apiService.completeRide(activeRide.rideId);
+            await apiService.completeRide(activeRide.rideId, getDriverId());
             setLastCompletedRide({
                 rideId: activeRide.rideId,
                 fare: activeRide.fare,
                 earnings: activeRide.fare // Assuming 100% earnings for now
             });
             setActiveRide(null);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to complete ride", e);
+            alert("Completion Failed: " + (e.response?.data?.error || e.message));
+        } finally {
+            setCompletingRide(false);
         }
     };
 
@@ -224,7 +271,7 @@ export default function DriverDashboard() {
                     )}
 
                     {/* Incoming Request Overlay */}
-                    {request && (
+                    {request ? (
                         <div className="glass-panel p-6 border-2 border-primary bg-primary/10 shadow-[0_0_30px_rgba(0,240,255,0.2)] animate-in slide-in-from-bottom-8">
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-2 text-primary font-bold">
@@ -267,6 +314,17 @@ export default function DriverDashboard() {
                                 <button onClick={handleAcceptRide} className="flex-1 py-3 rounded-lg bg-primary text-black font-bold shadow-[0_0_15px_rgba(0,240,255,0.4)] hover:bg-white transition-all">ACCEPT</button>
                             </div>
                         </div>
+                    ) : (
+                        !activeRide && (
+                            <div className="glass-panel p-10 flex flex-col items-center justify-center text-center opacity-70 animate-in fade-in zoom-in duration-500 min-h-[300px]">
+                                <LocateFixed size={48} className="text-gray-500 mb-4 animate-pulse duration-1000" />
+                                <div className="text-xl font-bold text-gray-400 uppercase tracking-widest">NO INCOMING REQUESTS</div>
+                                <div className="text-sm mt-3 text-gray-500 font-mono flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-ping"></span>
+                                    SCANNING SECTOR
+                                </div>
+                            </div>
+                        )
                     )}
 
                     {/* Active Ride Overlay */}
@@ -315,7 +373,9 @@ export default function DriverDashboard() {
                                     <button onClick={handleStart} className="flex-1 py-4 rounded-lg bg-primary text-black font-bold shadow-[0_0_15px_rgba(0,240,255,0.4)] hover:bg-primary/80 transition-all text-lg">START RIDE</button>
                                 )}
                                 {activeRide.status === 'IN_PROGRESS' && (
-                                    <button onClick={handleCompleteRide} className="flex-1 py-4 rounded-lg bg-green-500 text-black font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:bg-green-400 transition-all text-lg">MARK COMPLETION</button>
+                                    <button onClick={handleCompleteRide} disabled={completingRide} className="flex-1 py-4 rounded-lg bg-green-500 text-black font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:bg-green-400 disabled:bg-green-800 disabled:opacity-50 transition-all text-lg">
+                                        {completingRide ? 'COMPLETING...' : 'MARK COMPLETION'}
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -323,52 +383,17 @@ export default function DriverDashboard() {
                 </div>
 
                 {/* Right Column */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 flex flex-col">
 
-                    {/* Demand Heatmap (Recharts) */}
-                    <div className="glass-panel p-6 h-[300px] flex flex-col">
-                        <h3 className="font-bold mb-4 font-mono uppercase tracking-wider text-sm flex items-center gap-2">
-                            <MapPin size={16} className="text-accent" /> Grid Demand Forecast
-                        </h3>
-                        <div className="flex-1 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={data}>
-                                    <defs>
-                                        <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#ff003c" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#ff003c" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis dataKey="time" stroke="#444" tick={{ fill: '#888' }} />
-                                    <YAxis stroke="#444" tick={{ fill: '#888' }} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#121212', borderColor: '#333' }} />
-                                    <Area type="monotone" dataKey="load" stroke="#ff003c" fillOpacity={1} fill="url(#colorLoad)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
+                    {/* Live Ride Map */}
+                    <div className="glass-panel p-1 border border-white/10 h-[500px]">
+                        <RideMap
+                            driverPos={driverPos}
+                            passengerPos={activeRide?.passengerPos || request?.passengerPos}
+                            destinationPos={activeRide?.destinationPos || request?.destinationPos}
+                            status={activeRide ? (activeRide.status === 'ACCEPTED' || activeRide.status === 'DRIVER_ASSIGNED' ? 1 : activeRide.status === 'DRIVER_APPROACHING' ? 2 : activeRide.status === 'DRIVER_ARRIVED' ? 3 : activeRide.status === 'IN_PROGRESS' ? 4 : 5) : 0}
+                        />
                     </div>
-
-                    {/* Hot Zones */}
-                    <div className="glass-panel p-6">
-                        <h3 className="font-bold mb-4 font-mono uppercase tracking-wider text-sm">Current Hot Zones</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {[
-                                { name: 'Financial District', multiplier: '2.1x', demand: 'CRITICAL', color: 'text-accent border-accent' },
-                                { name: 'Central Terminal', multiplier: '1.8x', demand: 'HIGH', color: 'text-orange-500 border-orange-500' },
-                                { name: 'University Campus', multiplier: '1.2x', demand: 'ELEVATED', color: 'text-yellow-500 border-yellow-500' },
-                                { name: 'Sector 4 Residential', multiplier: '1.0x', demand: 'NORMAL', color: 'text-primary border-primary' },
-                            ].map(zone => (
-                                <div key={zone.name} className={`border-l-4 p-4 bg-surface/50 rounded-r-xl ${zone.color}`}>
-                                    <div className="text-white font-bold">{zone.name}</div>
-                                    <div className="flex justify-between mt-2 font-mono text-xs">
-                                        <span>{zone.demand}</span>
-                                        <span className="font-bold">{zone.multiplier} YIELD</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
                 </div>
 
             </div>

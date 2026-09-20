@@ -238,7 +238,7 @@ export default function PassengerDashboard() {
                                             <div className="flex-1">
                                                 <div className="font-bold text-white flex justify-between">
                                                     <span>{v.name}</span>
-                                                    <span className="text-primary">≈ ₹{Math.round((50 + calculateDistance() * 15) * v.multiplier)}</span>
+                                                    <span className="text-primary text-sm">ESTIMATE: ₹{Math.round((50 + calculateDistance() * 15) * v.multiplier)}</span>
                                                 </div>
                                                 <div className="text-xs text-gray-400 mt-1">{v.time} away • {(calculateDistance()).toFixed(1)} km route</div>
                                             </div>

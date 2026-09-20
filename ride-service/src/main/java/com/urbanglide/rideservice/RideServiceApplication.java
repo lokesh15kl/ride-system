@@ -43,7 +43,8 @@ public class RideServiceApplication {
     @GetMapping("/instance")
     public ResponseEntity<?> getInstanceInfo() {
         String port = env.getProperty("local.server.port");
-        if (port == null) port = env.getProperty("server.port");
+        if (port == null)
+            port = env.getProperty("server.port");
         return ResponseEntity.ok(Map.of("service", "RIDE-SERVICE", "port", port != null ? port : "unknown"));
     }
 
@@ -68,8 +69,21 @@ public class RideServiceApplication {
         ride.setVehicleType(vehicleType);
         ride.setStatus("REQUESTED");
 
-        // Random amount logic based on vehicleType
-        double baseFare = 10;
+        double distance = 5.0; // default
+        if (sourceLatitude != null && sourceLongitude != null && destinationLatitude != null
+                && destinationLongitude != null) {
+            double R = 6371;
+            double dLat = Math.toRadians(destinationLatitude - sourceLatitude);
+            double dLon = Math.toRadians(destinationLongitude - sourceLongitude);
+            double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(Math.toRadians(sourceLatitude)) * Math.cos(Math.toRadians(destinationLatitude)) *
+                            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            distance = Math.max(1.0, R * c);
+        }
+
+        // Amount logic based on vehicleType and distance
+        double baseFare = 50 + (distance * 15);
         double typeMultiplier = 1.0;
         if ("PREMIUM_CAR".equalsIgnoreCase(vehicleType))
             typeMultiplier = 2.0;
@@ -85,26 +99,32 @@ public class RideServiceApplication {
         int activeDrivers = 1; // Default to 1 to avoid division by zero
         try {
             List<Map<String, Object>> nearby = driverClient.getNearbyDrivers(
-                sourceLatitude != null ? sourceLatitude : 16.5, 
-                sourceLongitude != null ? sourceLongitude : 80.6, 
-                15.0, vehicleType);
+                    sourceLatitude != null ? sourceLatitude : 16.5,
+                    sourceLongitude != null ? sourceLongitude : 80.6,
+                    15.0, vehicleType);
             if (nearby != null && !nearby.isEmpty()) {
                 activeDrivers = nearby.size();
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
 
         double surgeMultiplier = 1.0;
         double ratio = (double) activeRequests / activeDrivers;
-        if (ratio > 1.5) surgeMultiplier = 1.5;
-        if (ratio > 3.0) surgeMultiplier = 2.0;
-        if (activeDrivers == 1 && activeRequests > 5) surgeMultiplier = 2.5;
+        if (ratio > 1.5)
+            surgeMultiplier = 1.5;
+        if (ratio > 3.0)
+            surgeMultiplier = 2.0;
+        if (activeDrivers == 1 && activeRequests > 5)
+            surgeMultiplier = 2.5;
 
-        BigDecimal finalFare = BigDecimal.valueOf(Math.round((baseFare + Math.random() * 40) * typeMultiplier * surgeMultiplier * 100.0) / 100.0)
+        BigDecimal finalFare = BigDecimal
+                .valueOf(Math.round(baseFare * typeMultiplier * surgeMultiplier * 100.0) / 100.0)
                 .setScale(2, java.math.RoundingMode.HALF_UP);
         ride.setAmount(finalFare);
 
         rideRepository.save(ride);
-        return ResponseEntity.ok(Map.of("ride", ride, "surgeApplied", surgeMultiplier > 1.0, "surgeMultiplier", surgeMultiplier));
+        return ResponseEntity
+                .ok(Map.of("ride", ride, "surgeApplied", surgeMultiplier > 1.0, "surgeMultiplier", surgeMultiplier));
     }
 
     @GetMapping("/all")
@@ -115,6 +135,16 @@ public class RideServiceApplication {
     @GetMapping("/requested")
     public ResponseEntity<List<Ride>> getRequestedRides() {
         return ResponseEntity.ok(rideRepository.findByStatus("REQUESTED"));
+    }
+
+    @GetMapping("/clearstale")
+    public ResponseEntity<?> clearStale() {
+        List<Ride> stale = rideRepository.findByStatus("REQUESTED");
+        for (Ride r : stale) {
+            r.setStatus("COMPLETED");
+            rideRepository.save(r);
+        }
+        return ResponseEntity.ok("Cleared " + stale.size() + " stale rides.");
     }
 
     @GetMapping("/user")
@@ -128,24 +158,45 @@ public class RideServiceApplication {
     }
 
     @PostMapping("/accept")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> acceptRide(@RequestParam("rideId") String rideId,
-            @RequestParam("driverId") String driverId) {
+            @RequestHeader(value = "X-User-Id", required = false) String authDriverId,
+            @RequestParam(value = "driverId", required = false) String providedDriverId) {
+
         Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
         if (optionalRide.isPresent()) {
             Ride ride = optionalRide.get();
+
+            // Broadast Model: Safely derive trusted identity
+            String actualDriverId = (authDriverId != null && !authDriverId.isEmpty()) ? authDriverId : providedDriverId;
+
+            // SECURITY 403 CHECK
+            if (actualDriverId == null || actualDriverId.isEmpty()
+                    || (providedDriverId != null && !providedDriverId.equals(actualDriverId))) {
+                return ResponseEntity.status(403)
+                        .body(Map.of("error", "Driver is not authorized to accept this ride."));
+            }
+
+            if ("ACCEPTED".equals(ride.getStatus()) || "IN_PROGRESS".equals(ride.getStatus())) {
+                return ResponseEntity.status(409)
+                        .body(Map.of("error", "Ride has already been accepted by another driver."));
+            }
             if (!"REQUESTED".equals(ride.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in REQUESTED state"));
             }
 
             // Mark driver as Busy
-            driverClient.updateDriverStatus(driverId, "ON_RIDE");
+            try {
+                driverClient.updateDriverStatus(actualDriverId, "ON_RIDE");
+            } catch (Exception e) {
+            }
 
             ride.setStatus("ACCEPTED");
-            ride.setDriverId(driverId);
+            ride.setDriverId(actualDriverId);
             rideRepository.save(ride);
             return ResponseEntity.ok(ride);
         }
-        return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
+        return ResponseEntity.status(404).body(Map.of("error", "Ride no longer exists."));
     }
 
     @PostMapping("/approach")
@@ -194,23 +245,48 @@ public class RideServiceApplication {
     }
 
     @PostMapping("/complete")
-    public ResponseEntity<?> completeRide(@RequestParam("rideId") String rideId) {
+    public ResponseEntity<?> completeRide(@RequestParam("rideId") String rideId,
+            @RequestParam("driverId") String driverId) {
         Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
         if (optionalRide.isPresent()) {
             Ride ride = optionalRide.get();
+
+            // Check duplicate completion
+            if ("COMPLETED".equals(ride.getStatus())) {
+                return ResponseEntity.status(409).body(Map.of("error", "Ride already completed"));
+            }
+
+            // Validate state
             if (!"IN_PROGRESS".equals(ride.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in IN_PROGRESS state"));
             }
 
-            // Auto process payment
-            Map<String, Object> paymentStatus = paymentClient.processPayment(rideId, ride.getAmount());
+            // Validate driver ownership
+            if (ride.getDriverId() == null || !ride.getDriverId().equals(driverId)) {
+                return ResponseEntity.status(403).body(Map.of("error", "Driver does not own this ride"));
+            }
+
+            // Auto process payment safely
+            Map<String, Object> paymentStatus;
+            try {
+                paymentStatus = paymentClient.processPayment(rideId, ride.getAmount());
+            } catch (Exception e) {
+                return ResponseEntity.status(500).body(Map.of("error", "Payment processing failed", "message",
+                        e.getMessage(), "rideId", rideId, "fare", ride.getAmount()));
+            }
+
             ride.setStatus("COMPLETED");
             rideRepository.save(ride);
 
             // Free the driver
-            driverClient.updateDriverStatus(ride.getDriverId(), "AVAILABLE");
+            try {
+                driverClient.updateDriverStatus(ride.getDriverId(), "AVAILABLE");
+            } catch (Exception e) {
+                // Ignore driver status update failure to not rollback actual completion
+            }
 
-            return ResponseEntity.ok(Map.of("message", "Ride completed and payment processed automatically.", "ride", ride, "payment", paymentStatus));
+            return ResponseEntity.ok(Map.of("message", "Ride completed and payment processed automatically.", "ride",
+                    ride, "payment", paymentStatus));
         }
         return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
     }
@@ -274,7 +350,8 @@ public class RideServiceApplication {
 @FeignClient(name = "payment-service")
 interface PaymentClient {
     @PostMapping("/api/payments/process")
-    Map<String, Object> processPayment(@RequestParam("rideId") String rideId, @RequestParam("amount") java.math.BigDecimal amount);
+    Map<String, Object> processPayment(@RequestParam("rideId") String rideId,
+            @RequestParam("amount") java.math.BigDecimal amount);
 }
 
 @FeignClient(name = "driver-service")

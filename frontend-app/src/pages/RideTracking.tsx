@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Map, Zap, CheckCircle, Navigation, ShieldCheck, CreditCard, Loader2 } from 'lucide-react';
 import { apiService } from '../services/api';
+import RideMap from '../components/RideMap';
 
 export default function RideTracking() {
     const { id } = useParams();
@@ -12,20 +13,31 @@ export default function RideTracking() {
     // 0: searching, 1: assigned, 2: arriving, 3: arrived, 4: in_transit, 5: completed
 
     const [stopPolling, setStopPolling] = useState(false);
+    const [passengerPos, setPassengerPos] = useState<{ lat: number, lng: number } | null>(null);
+    const [destinationPos, setDestinationPos] = useState<{ lat: number, lng: number } | null>(null);
+    const [driverPos, setDriverPos] = useState<{ lat: number, lng: number } | null>(null);
 
     useEffect(() => {
         const fetchState = async () => {
             try {
                 const res = await apiService.getLiveTracker(id || '');
                 if (res.data && res.data.ride) {
-                    const rideStatus = res.data.ride.status;
+                    const rideStatus = String(res.data.ride.status || '').trim().toUpperCase();
                     setAmount(res.data.ride.amount);
+
+                    if (res.data.ride.sourceLatitude) setPassengerPos({ lat: res.data.ride.sourceLatitude, lng: res.data.ride.sourceLongitude });
+                    if (res.data.ride.destinationLatitude) setDestinationPos({ lat: res.data.ride.destinationLatitude, lng: res.data.ride.destinationLongitude });
+
+                    if (res.data.driverLocation && res.data.driverLocation.latitude) {
+                        setDriverPos({ lat: res.data.driverLocation.latitude, lng: res.data.driverLocation.longitude });
+                    }
+
                     if (rideStatus === 'REQUESTED') setStatus(0);
                     else if (rideStatus === 'ACCEPTED' || rideStatus === 'DRIVER_ASSIGNED') setStatus(1);
                     else if (rideStatus === 'DRIVER_APPROACHING') setStatus(2);
                     else if (rideStatus === 'DRIVER_ARRIVED') setStatus(3);
                     else if (rideStatus === 'IN_PROGRESS') setStatus(4);
-                    else if (rideStatus === 'COMPLETED') {
+                    else if (rideStatus === 'COMPLETED' || rideStatus === 'COMPLETED_PAID') {
                         setStatus(5);
                         setStopPolling(true);
                     }
@@ -101,8 +113,8 @@ export default function RideTracking() {
 
                     <div className="relative border-l border-white/10 ml-4 space-y-8">
                         {statuses.map((s, idx) => {
-                            const isPast = idx < status;
-                            const isCurrent = idx === status;
+                            const isPast = (status === 5 && idx === 5) ? true : idx < status;
+                            const isCurrent = (status === 5 && idx === 5) ? false : idx === status;
                             const isFuture = idx > status;
 
                             return (
@@ -145,36 +157,13 @@ export default function RideTracking() {
                 </div>
 
                 {/* Right Panel - Map */}
-                <div className="md:col-span-3 glass-panel relative overflow-hidden flex shadow-2xl">
-                    <div className="absolute inset-0 bg-[#070707]" style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-
-                        {/* Dynamic Path mapping simulation based on status */}
-                        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60">
-                            {status >= 1 && status < 4 && (
-                                <path d="M 20% 80% Q 50% 50%, 50% 50%" fill="none" stroke="#ff003c" strokeWidth="2" strokeDasharray="5,5" className="animate-[dash_5s_linear_infinite]" />
-                            )}
-                            {status >= 4 && (
-                                <path d="M 50% 50% Q 70% 30%, 80% 20%" fill="none" stroke="#00f0ff" strokeWidth="3" className="shadow-[0_0_10px_#00f0ff]" />
-                            )}
-                        </svg>
-
-                        {/* Driver Marker */}
-                        {status >= 1 && status < 5 && (
-                            <div className="absolute w-6 h-6 bg-accent rounded-full shadow-[0_0_20px_#ff003c] transition-all duration-[4000ms] z-10 flex items-center justify-center"
-                                style={{
-                                    left: status === 1 ? '20%' : status === 2 ? '35%' : '50%',
-                                    top: status === 1 ? '80%' : status === 2 ? '65%' : '50%',
-                                }}>
-                                <Navigation size={12} className="text-white fill-current" />
-                            </div>
-                        )}
-
-                        {/* Pickup Marker */}
-                        <div className="absolute top-[50%] left-[50%] w-4 h-4 rounded-full border-2 border-primary -translate-x-1/2 -translate-y-1/2 bg-black z-0"></div>
-
-                        {/* Destination Marker */}
-                        <div className="absolute top-[20%] left-[80%] w-4 h-4 rounded-sm bg-white -translate-x-1/2 -translate-y-1/2 z-0"></div>
-                    </div>
+                <div className="md:col-span-3 glass-panel relative overflow-hidden flex shadow-2xl h-[500px] md:h-auto border border-white/10 p-1">
+                    <RideMap
+                        passengerPos={passengerPos}
+                        driverPos={driverPos}
+                        destinationPos={destinationPos}
+                        status={status}
+                    />
                 </div>
             </div>
         </div>

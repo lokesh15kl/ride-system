@@ -30,8 +30,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/eureka",
             "/v3/api-docs",
             "/swagger-ui",
-            "/actuator"
-    );
+            "/actuator");
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -62,7 +61,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                         .build()
                         .parseClaimsJws(token)
                         .getBody();
-                
+
                 String role = claims.get("role", String.class);
                 String path = request.getURI().getPath();
 
@@ -70,13 +69,15 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 if (path.startsWith("/api/drivers/approve") && !"ADMIN".equalsIgnoreCase(role)) {
                     return onError(exchange, "Access denied", HttpStatus.FORBIDDEN);
                 }
-                if (path.startsWith("/api/rides/accept") && !"DRIVER".equalsIgnoreCase(role) && !"ADMIN".equalsIgnoreCase(role)) {
+                if (path.startsWith("/api/rides/accept") && !"DRIVER".equalsIgnoreCase(role)
+                        && !"ADMIN".equalsIgnoreCase(role)) {
                     return onError(exchange, "Access denied", HttpStatus.FORBIDDEN);
                 }
 
                 // Strip any client-supplied headers and push trusted JWT headers downstream
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
-                        .header("X-User-Id", claims.get("userId") != null ? String.valueOf(claims.get("userId")) : claims.getSubject())
+                        .header("X-User-Id", claims.getSubject()) // Crucial: use subject (username defaults to
+                                                                  // driverId)
                         .header("X-User-Role", role)
                         .build();
 

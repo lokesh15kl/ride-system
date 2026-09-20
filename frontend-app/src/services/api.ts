@@ -62,7 +62,7 @@ export const apiService = {
     approachRide: (rideId: string) => apiClient.post('/rides/approach', null, { params: { rideId } }),
     arriveRide: (rideId: string) => apiClient.post('/rides/arrive', null, { params: { rideId } }),
     startRide: (rideId: string) => apiClient.post('/rides/start', null, { params: { rideId } }),
-    completeRide: (rideId: string) => apiClient.post('/rides/complete', null, { params: { rideId } }),
+    completeRide: (rideId: string, driverId: string) => apiClient.post('/rides/complete', null, { params: { rideId, driverId } }),
     updateDriverLocation: (driverId: string, lat: number, lng: number) => apiClient.post('/drivers/location', null, { params: { driverId, latitude: lat, longitude: lng } }),
 
     // Auth & Users
