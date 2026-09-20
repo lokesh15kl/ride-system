@@ -11,6 +11,8 @@ export default function RideTracking() {
     const [isPaying, setIsPaying] = useState(false);
     // 0: searching, 1: assigned, 2: arriving, 3: arrived, 4: in_transit, 5: completed
 
+    const [stopPolling, setStopPolling] = useState(false);
+
     useEffect(() => {
         const fetchState = async () => {
             try {
@@ -20,20 +22,31 @@ export default function RideTracking() {
                     setAmount(res.data.ride.amount);
                     if (rideStatus === 'REQUESTED') setStatus(0);
                     else if (rideStatus === 'ACCEPTED' || rideStatus === 'DRIVER_ASSIGNED') setStatus(1);
-                    else if (rideStatus === 'DRIVER_ARRIVING') setStatus(2);
+                    else if (rideStatus === 'DRIVER_APPROACHING') setStatus(2);
                     else if (rideStatus === 'DRIVER_ARRIVED') setStatus(3);
-                    else if (rideStatus === 'RIDE_STARTED' || rideStatus === 'ON_RIDE') setStatus(4);
-                    else if (rideStatus === 'COMPLETED_PAID' || rideStatus === 'PENDING_PAYMENT') setStatus(5);
+                    else if (rideStatus === 'IN_PROGRESS') setStatus(4);
+                    else if (rideStatus === 'COMPLETED') {
+                        setStatus(5);
+                        setStopPolling(true);
+                    }
                 }
             } catch (e) {
                 console.error(e);
             }
         };
 
-        fetchState();
-        const timer = setInterval(fetchState, 3000);
-        return () => clearInterval(timer);
-    }, [id]);
+        if (!stopPolling) {
+            fetchState();
+            const timer = setInterval(fetchState, 3000);
+            return () => clearInterval(timer);
+        }
+    }, [id, stopPolling]);
+
+    useEffect(() => {
+        if (status === 5) {
+            console.log("Ride completed, stopping polling.");
+        }
+    }, [status]);
 
     const handlePayment = async () => {
         // Obsolete as payment is auto, but keeping for fallback
@@ -64,6 +77,7 @@ export default function RideTracking() {
             <div className="glass-panel p-4 mb-4 flex justify-between items-center bg-black/60 sticky top-0 z-10 border border-white/5">
                 <div>
                     <h2 className="text-xl font-bold font-sans">Route Telemetry Link</h2>
+                    <div className="text-xs text-primary/80 mb-1">Near-real-time ride and location tracking using REST polling.</div>
                     <div className="text-sm font-mono text-gray-400 mt-1">ID: {id}</div>
                 </div>
                 {status === 5 ? (

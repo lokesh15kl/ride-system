@@ -1,6 +1,7 @@
 package com.urbanglide.rideservice.model;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "rides")
@@ -21,7 +22,7 @@ public class Ride {
     private Double destinationLongitude;
 
     private String status; // REQUESTED, ACCEPTED, REJECTED, COMPLETED
-    private Double amount;
+    private BigDecimal amount;
 
     private String vehicleType;
 
@@ -82,11 +83,11 @@ public class Ride {
         this.status = status;
     }
 
-    public Double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(Double amount) {
+    public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
 

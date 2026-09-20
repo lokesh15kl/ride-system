@@ -17,7 +17,8 @@ import java.util.Optional;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    private static final String SECRET_KEY = "urbanglide_secret_key_which_should_be_long_enough_for_hs256_algorithm!";
+    @org.springframework.beans.factory.annotation.Value("${jwt.secret:urbanglide_secret_key_which_should_be_long_enough_for_hs256_algorithm!}")
+    private String secretKey;
 
     @Autowired
     private UserRepository userRepository;
@@ -62,7 +63,7 @@ public class AuthController {
                     .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 10))
                     .signWith(
                             io.jsonwebtoken.security.Keys
-                                    .hmacShaKeyFor(SECRET_KEY.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                                    .hmacShaKeyFor(secretKey.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                             SignatureAlgorithm.HS256)
                     .compact();
 

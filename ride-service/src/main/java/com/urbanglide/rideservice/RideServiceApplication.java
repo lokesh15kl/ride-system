@@ -11,10 +11,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.core.env.Environment;
 
 @SpringBootApplication
 @EnableDiscoveryClient
@@ -34,6 +36,16 @@ public class RideServiceApplication {
 
     @Autowired
     private DriverClient driverClient;
+
+    @Autowired
+    private Environment env;
+
+    @GetMapping("/instance")
+    public ResponseEntity<?> getInstanceInfo() {
+        String port = env.getProperty("local.server.port");
+        if (port == null) port = env.getProperty("server.port");
+        return ResponseEntity.ok(Map.of("service", "RIDE-SERVICE", "port", port != null ? port : "unknown"));
+    }
 
     @PostMapping("/book")
     public ResponseEntity<?> bookRide(@RequestParam("userId") String userId,
@@ -87,7 +99,9 @@ public class RideServiceApplication {
         if (ratio > 3.0) surgeMultiplier = 2.0;
         if (activeDrivers == 1 && activeRequests > 5) surgeMultiplier = 2.5;
 
-        ride.setAmount(Math.round((baseFare + Math.random() * 40) * typeMultiplier * surgeMultiplier * 100.0) / 100.0);
+        BigDecimal finalFare = BigDecimal.valueOf(Math.round((baseFare + Math.random() * 40) * typeMultiplier * surgeMultiplier * 100.0) / 100.0)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        ride.setAmount(finalFare);
 
         rideRepository.save(ride);
         return ResponseEntity.ok(Map.of("ride", ride, "surgeApplied", surgeMultiplier > 1.0, "surgeMultiplier", surgeMultiplier));
@@ -134,18 +148,63 @@ public class RideServiceApplication {
         return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
     }
 
-    @PostMapping("/complete")
-    public ResponseEntity<?> completeRide(@RequestParam("rideId") String rideId) {
+    @PostMapping("/approach")
+    public ResponseEntity<?> approachRide(@RequestParam("rideId") String rideId) {
         Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
         if (optionalRide.isPresent()) {
             Ride ride = optionalRide.get();
             if (!"ACCEPTED".equals(ride.getStatus())) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in ACCEPTED state"));
             }
+            ride.setStatus("DRIVER_APPROACHING");
+            rideRepository.save(ride);
+            return ResponseEntity.ok(ride);
+        }
+        return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
+    }
+
+    @PostMapping("/arrive")
+    public ResponseEntity<?> arriveRide(@RequestParam("rideId") String rideId) {
+        Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
+        if (optionalRide.isPresent()) {
+            Ride ride = optionalRide.get();
+            if (!"DRIVER_APPROACHING".equals(ride.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in DRIVER_APPROACHING state"));
+            }
+            ride.setStatus("DRIVER_ARRIVED");
+            rideRepository.save(ride);
+            return ResponseEntity.ok(ride);
+        }
+        return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
+    }
+
+    @PostMapping("/start")
+    public ResponseEntity<?> startRide(@RequestParam("rideId") String rideId) {
+        Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
+        if (optionalRide.isPresent()) {
+            Ride ride = optionalRide.get();
+            if (!"DRIVER_ARRIVED".equals(ride.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in DRIVER_ARRIVED state"));
+            }
+            ride.setStatus("IN_PROGRESS");
+            rideRepository.save(ride);
+            return ResponseEntity.ok(ride);
+        }
+        return ResponseEntity.badRequest().body(Map.of("error", "Ride not found"));
+    }
+
+    @PostMapping("/complete")
+    public ResponseEntity<?> completeRide(@RequestParam("rideId") String rideId) {
+        Optional<Ride> optionalRide = rideRepository.findByRideId(rideId);
+        if (optionalRide.isPresent()) {
+            Ride ride = optionalRide.get();
+            if (!"IN_PROGRESS".equals(ride.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Ride is not in IN_PROGRESS state"));
+            }
 
             // Auto process payment
             Map<String, Object> paymentStatus = paymentClient.processPayment(rideId, ride.getAmount());
-            ride.setStatus("COMPLETED_PAID");
+            ride.setStatus("COMPLETED");
             rideRepository.save(ride);
 
             // Free the driver
@@ -215,7 +274,7 @@ public class RideServiceApplication {
 @FeignClient(name = "payment-service")
 interface PaymentClient {
     @PostMapping("/api/payments/process")
-    Map<String, Object> processPayment(@RequestParam("rideId") String rideId, @RequestParam("amount") Double amount);
+    Map<String, Object> processPayment(@RequestParam("rideId") String rideId, @RequestParam("amount") java.math.BigDecimal amount);
 }
 
 @FeignClient(name = "driver-service")

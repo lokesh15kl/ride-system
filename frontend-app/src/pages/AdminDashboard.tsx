@@ -84,7 +84,7 @@ export default function AdminDashboard() {
                     { label: 'ACTIVE NODES (Drivers)', value: realDrivers.length.toString(), icon: Truck, color: 'text-primary' },
                     { label: 'REGISTERED USERS', value: realUsers.length.toString(), icon: Users, color: 'text-secondary' },
                     { label: 'RIDES ISSUED', value: realRides.length.toString(), icon: Activity, color: 'text-accent' },
-                    { label: 'TOTAL YIELD', value: `₹${totalRevenue.toFixed(0)}`, icon: DollarSign, color: 'text-green-400' },
+                    { label: 'TOTAL YIELD', value: `₹${totalRevenue.toFixed(2)}`, icon: DollarSign, color: 'text-green-400' },
                 ].map(kpi => (
                     <div key={kpi.label} className="glass-panel p-6">
                         <div className="flex justify-between items-start mb-4">

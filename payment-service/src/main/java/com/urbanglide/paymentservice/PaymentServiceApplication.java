@@ -27,7 +27,7 @@ public class PaymentServiceApplication {
 
     @PostMapping("/process")
     public ResponseEntity<Map<String, Object>> processPayment(@RequestParam("rideId") String rideId,
-            @RequestParam("amount") Double amount) {
+            @RequestParam("amount") java.math.BigDecimal amount) {
         Map<String, Object> response = new HashMap<>();
         response.put("rideId", rideId);
         response.put("amount", amount);

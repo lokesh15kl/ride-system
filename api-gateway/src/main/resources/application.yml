@@ -24,24 +24,25 @@ spring:
           lower-case-service-id: true
       routes:
         - id: ride-service
-          uri: lb://ride-service
+          uri: http://localhost:8083
           predicates:
             - Path=/api/rides/**
         - id: driver-service
-          uri: lb://driver-service
+          uri: http://localhost:8082
           predicates:
             - Path=/api/drivers/**
         - id: auth-service
-          uri: lb://auth-service
+          uri: http://localhost:8081
           predicates:
             - Path=/api/auth/**
         - id: payment-service
-          uri: lb://payment-service
+          uri: http://localhost:8084
           predicates:
             - Path=/api/payments/**
 
 eureka:
   instance:
+    prefer-ip-address: true
     status-page-url: http://localhost:${server.port}/webjars/swagger-ui/index.html
   client:
     service-url:
