@@ -45,14 +45,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         if (isApiSecured.test(request)) {
             if (!request.getHeaders().containsKey("Authorization")) {
-                return onError(exchange, "Authentication required", HttpStatus.UNAUTHORIZED);
+                return onError(exchange, "Missing or invalid JWT token", HttpStatus.UNAUTHORIZED);
             }
 
             String token = request.getHeaders().getOrEmpty("Authorization").get(0);
             if (token != null && token.startsWith("Bearer ")) {
-                token = token.substring(7);
+                token = token.substring(7); // "Bearer ".length()
             } else {
-                return onError(exchange, "Authentication required", HttpStatus.UNAUTHORIZED);
+                return onError(exchange, "Missing or invalid JWT token", HttpStatus.UNAUTHORIZED);
             }
 
             try {
@@ -67,25 +67,23 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
                 // Role Based Authorization Enforcement
                 if (path.startsWith("/api/drivers/approve") && !"ADMIN".equalsIgnoreCase(role)) {
-                    return onError(exchange, "Access denied", HttpStatus.FORBIDDEN);
+                    return onError(exchange, "Insufficient permissions", HttpStatus.FORBIDDEN);
                 }
                 if (path.startsWith("/api/rides/accept") && !"DRIVER".equalsIgnoreCase(role)
                         && !"ADMIN".equalsIgnoreCase(role)) {
-                    return onError(exchange, "Access denied", HttpStatus.FORBIDDEN);
+                    return onError(exchange, "Insufficient permissions", HttpStatus.FORBIDDEN);
                 }
 
                 // Strip any client-supplied headers and push trusted JWT headers downstream
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
-                        .header("X-User-Id", claims.getSubject()) // Crucial: use subject (username defaults to
-                                                                  // driverId)
+                        .header("X-User-Id", claims.getSubject()) // Crucial: use subject (username defaults to driverId)
                         .header("X-User-Role", role)
                         .build();
 
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
             } catch (Exception e) {
                 System.err.println("JWT Validation Error: " + e.getMessage());
-                e.printStackTrace();
-                return onError(exchange, "Authentication required", HttpStatus.UNAUTHORIZED);
+                return onError(exchange, "Missing or invalid JWT token", HttpStatus.UNAUTHORIZED);
             }
         }
         return chain.filter(exchange);
@@ -95,7 +93,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(httpStatus);
         response.getHeaders().add("Content-Type", "application/json");
-        String body = String.format("{\"status\": %d, \"message\": \"%s\"}", httpStatus.value(), err);
+        String body = String.format("{\"error\": \"%s\", \"message\": \"%s\"}", httpStatus.getReasonPhrase(), err);
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return response.writeWith(Mono.just(buffer));
     }
