@@ -22,3 +22,7 @@
 /ride-service/target/
 /payment-service/target/
 /eureka-server/target/
+
+.project
+.classpath
+.settings/
