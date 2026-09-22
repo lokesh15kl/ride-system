@@ -19,6 +19,7 @@ export default function AdminDashboard() {
     const [totalRevenue, setTotalRevenue] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [segmentFilter, setSegmentFilter] = useState('ALL');
+    const [pendingVehicles, setPendingVehicles] = useState<Record<string, string>>({});
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -139,11 +140,30 @@ export default function AdminDashboard() {
                                             <td className="py-4 font-mono text-gray-300">{d.driverId}</td>
                                             <td className="py-4 text-white font-medium">{d.name}</td>
                                             <td className="py-4"><span className="px-2 py-1 bg-white/5 rounded-md text-xs text-primary">{d.vehicleType}</span></td>
-                                            <td className="py-4 font-mono text-gray-300">{d.vehicleNumber || 'N/A'}</td>
+                                            <td className="py-4 font-mono text-gray-300">
+                                                {d.verificationStatus === 'PENDING' ? (
+                                                    <input
+                                                        type="text"
+                                                        placeholder="VEHICLE NUMBER"
+                                                        className="bg-black/50 border border-white/20 rounded p-1 text-xs outline-none focus:border-primary uppercase"
+                                                        value={pendingVehicles[d.driverId] || ''}
+                                                        onChange={e => setPendingVehicles({ ...pendingVehicles, [d.driverId]: e.target.value })}
+                                                    />
+                                                ) : (d.vehicleNumber || 'N/A')}
+                                            </td>
                                             <td className="py-4 text-xs font-mono text-green-400">
                                                 {d.verificationStatus === 'PENDING' ? (
                                                     <div className="flex gap-2">
-                                                        <button onClick={async () => { await apiService.approveDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-yellow-500/20 text-yellow-500 rounded border border-yellow-500/40 hover:bg-yellow-500/30 transition">APPROVE</button>
+                                                        <button
+                                                            disabled={!pendingVehicles[d.driverId]}
+                                                            onClick={async () => {
+                                                                if (!pendingVehicles[d.driverId]) return;
+                                                                await apiService.approveDriver(d.driverId, pendingVehicles[d.driverId]);
+                                                                fetchData();
+                                                            }}
+                                                            className={`px-3 py-1 rounded border transition ${!pendingVehicles[d.driverId] ? 'bg-gray-500/20 text-gray-500 border-gray-500/40 cursor-not-allowed' : 'bg-yellow-500/20 text-yellow-500 border-yellow-500/40 hover:bg-yellow-500/30'}`}>
+                                                            APPROVE
+                                                        </button>
                                                         <button onClick={async () => { await apiService.rejectDriver(d.driverId); fetchData(); }} className="px-3 py-1 bg-red-500/20 text-red-500 rounded border border-red-500/40 hover:bg-red-500/30 transition">REJECT</button>
                                                     </div>
                                                 ) : <span className={d.verificationStatus === 'REJECTED' ? 'text-red-500' : 'text-green-400'}>{d.verificationStatus === 'APPROVED' ? d.status : d.verificationStatus}</span>}

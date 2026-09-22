@@ -44,9 +44,37 @@ export default function Login() {
                     localStorage.setItem('token', res.data.token);
                     localStorage.setItem('role', mappedRole);
 
-                    if (mappedRole === 'passenger') navigate('/passenger/dashboard');
-                    else if (mappedRole === 'driver') navigate('/driver/dashboard');
-                    else if (mappedRole === 'admin') navigate('/admin/dashboard');
+                    if (mappedRole === 'driver') {
+                        try {
+                            const dStatus = await apiService.getDriverStatus(email);
+                            if (dStatus.data.verificationStatus === 'PENDING') {
+                                localStorage.removeItem('token');
+                                localStorage.removeItem('role');
+                                setError('Your driver account is awaiting Admin approval.');
+                                setIsLoading(false);
+                                return;
+                            } else if (dStatus.data.verificationStatus === 'REJECTED') {
+                                localStorage.removeItem('token');
+                                localStorage.removeItem('role');
+                                setError('Your KYC was rejected. Please contact support.');
+                                setIsLoading(false);
+                                return;
+                            }
+                            navigate('/driver/dashboard');
+                        } catch (e: any) {
+                            if (e.response?.status === 404) {
+                                setError('Driver profile not found.');
+                            } else {
+                                setError('Unable to connect to the server. Please try again.');
+                            }
+                            setIsLoading(false);
+                            return;
+                        }
+                    } else if (mappedRole === 'passenger') {
+                        navigate('/passenger/dashboard');
+                    } else if (mappedRole === 'admin') {
+                        navigate('/admin/dashboard');
+                    }
                 }
             } else {
                 // Real Registration Flow
@@ -77,7 +105,23 @@ export default function Login() {
                     setIsLoading(false);
                 }, 1000);
             } else {
-                setError(err.response?.data?.error || 'Authentication failed. Please check credentials or backend connection.');
+                const status = err.response?.status;
+                const errorData = err.response?.data;
+                const backendMsg = errorData?.message || errorData?.error;
+
+                if (backendMsg && backendMsg !== "Unauthorized") {
+                    setError(backendMsg);
+                } else if (status === 401) {
+                    setError("Authentication required.");
+                } else if (status === 403) {
+                    setError("You are not authorized to perform this action.");
+                } else if (status === 400) {
+                    setError("Invalid registration details.");
+                } else if (status === 409) {
+                    setError("Username already exists.");
+                } else {
+                    setError("Unable to connect to the server. Please try again.");
+                }
             }
         } finally {
             if (!USE_MOCK) setIsLoading(false);

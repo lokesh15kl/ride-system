@@ -27,6 +27,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final List<String> OPEN_API_ENDPOINTS = List.of(
             "/api/auth/register",
             "/api/auth/login",
+            "/api/drivers/register",
             "/eureka",
             "/v3/api-docs",
             "/swagger-ui",

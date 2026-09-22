@@ -40,13 +40,27 @@ public class DriverServiceApplication {
     }
 
     @PostMapping("/approve")
-    public ResponseEntity<?> approveDriver(@RequestParam("driverId") String driverId) {
+    public ResponseEntity<?> approveDriver(@RequestParam("driverId") String driverId, @RequestParam(value = "vehicleNumber", required = false) String vehicleNumber) {
+        if (vehicleNumber == null || vehicleNumber.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Vehicle number is required"));
+        }
         Optional<Driver> opt = driverRepository.findByDriverId(driverId);
         if (opt.isPresent()) {
             Driver driver = opt.get();
+            if (!"PENDING".equalsIgnoreCase(driver.getVerificationStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Driver verification status is not PENDING"));
+            }
+            
             driver.setVerificationStatus("APPROVED");
+            driver.setVehicleNumber(vehicleNumber.trim().toUpperCase());
             driverRepository.save(driver);
-            return ResponseEntity.ok(driver);
+            
+            return ResponseEntity.ok(Map.of(
+                "message", "Driver KYC approved successfully",
+                "driverId", driver.getDriverId(),
+                "vehicleNumber", driver.getVehicleNumber(),
+                "verificationStatus", "APPROVED"
+            ));
         }
         return ResponseEntity.notFound().build();
     }

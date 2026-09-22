@@ -70,7 +70,8 @@ export const apiService = {
 
     // Drivers
     registerDriver: (driverId: string, name: string, vehicleType: string) => apiClient.post('/drivers/register', null, { params: { driverId, name, vehicleType } }),
-    approveDriver: (driverId: string) => apiClient.post('/drivers/approve', null, { params: { driverId } }),
+    getDriverStatus: (driverId: string) => apiClient.get('/drivers/status', { params: { driverId } }),
+    approveDriver: (driverId: string, vehicleNumber: string) => apiClient.post('/drivers/approve', null, { params: { driverId, vehicleNumber } }),
     rejectDriver: (driverId: string) => apiClient.post('/drivers/reject', null, { params: { driverId } }),
     getAllDrivers: () => apiClient.get('/drivers/all'),
     submitFeedback: (rideId: string, rating: number, comment: string) => apiClient.post(`/rides/${rideId}/feedback`, { rating, comment })
