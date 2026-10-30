@@ -1,28 +1,85 @@
-/target/
-/.idea/
-/.vscode/
+# Compiled class file
 *.class
+
+# Log file
+*.log
+
+# Package Files
 *.jar
 *.war
+*.nar
 *.ear
 *.zip
 *.tar.gz
 *.rar
-/.mvn/
-/node_modules/
-/dist/
-/.env
-*.log
-/frontend-app/node_modules/
-/frontend-app/dist/
-/frontend-app/.env
-/api-gateway/target/
-/auth-service/target/
-/driver-service/target/
-/ride-service/target/
-/payment-service/target/
-/eureka-server/target/
 
-.project
-.classpath
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+**/target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Eclipse / Spring Tool Suite (STS)
+.metadata
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+local.properties
 .settings/
+**/.settings/
+.loadpath
+.recommenders
+.project
+**/.project
+.classpath
+**/.classpath
+
+# IntelliJ IDEA
+.idea/
+**/.idea/
+*.iws
+*.iml
+*.ipr
+out/
+**/out/
+
+# Visual Studio Code
+.vscode/
+**/.vscode/
+
+# Node.js / Frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+vite.config.js.timestamp*
+*.timestamp-*.mjs
+
+# Environment variables & credentials
+.env
+.env.local
+.env.*.local
+*.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db

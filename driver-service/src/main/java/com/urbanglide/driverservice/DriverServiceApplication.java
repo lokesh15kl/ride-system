@@ -2,6 +2,8 @@ package com.urbanglide.driverservice;
 
 import com.urbanglide.driverservice.model.Driver;
 import com.urbanglide.driverservice.repository.DriverRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -39,6 +41,7 @@ public class DriverServiceApplication {
         return ResponseEntity.ok(driver);
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/approve")
     public ResponseEntity<?> approveDriver(@RequestParam("driverId") String driverId, @RequestParam(value = "vehicleNumber", required = false) String vehicleNumber) {
         if (vehicleNumber == null || vehicleNumber.trim().isEmpty()) {
@@ -65,6 +68,7 @@ public class DriverServiceApplication {
         return ResponseEntity.notFound().build();
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/reject")
     public ResponseEntity<?> rejectDriver(@RequestParam("driverId") String driverId) {
         Optional<Driver> opt = driverRepository.findByDriverId(driverId);
@@ -77,6 +81,7 @@ public class DriverServiceApplication {
         return ResponseEntity.notFound().build();
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/status")
     public ResponseEntity<?> getStatus(@RequestParam("driverId") String driverId) {
         Optional<Driver> driver = driverRepository.findByDriverId(driverId);
@@ -86,11 +91,13 @@ public class DriverServiceApplication {
         return ResponseEntity.notFound().build();
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/all")
     public ResponseEntity<?> getAllDrivers() {
         return ResponseEntity.ok(driverRepository.findAll());
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/status")
     public ResponseEntity<?> updateStatus(@RequestParam("driverId") String driverId,
             @RequestParam("status") String status) {
@@ -108,6 +115,7 @@ public class DriverServiceApplication {
         }
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/location")
     public ResponseEntity<?> updateLocation(@RequestParam("driverId") String driverId,
             @RequestParam("latitude") Double latitude,
@@ -124,6 +132,7 @@ public class DriverServiceApplication {
         }
     }
 
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/nearby")
     public ResponseEntity<?> getNearbyDrivers(@RequestParam("latitude") Double latitude,
             @RequestParam("longitude") Double longitude,

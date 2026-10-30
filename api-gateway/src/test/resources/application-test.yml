@@ -1,0 +1,9 @@
+server:
+  port: 0
+
+eureka:
+  client:
+    enabled: false
+
+jwt:
+  secret: test_secret_key_which_should_be_long_enough_for_hs256_algorithm_testing!

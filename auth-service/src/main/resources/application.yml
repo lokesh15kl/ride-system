@@ -29,3 +29,6 @@ management:
     web:
       exposure:
         include: health,info
+
+jwt:
+  secret: ${JWT_SECRET:urbanglide_secret_key_which_should_be_long_enough_for_hs256_algorithm!}
